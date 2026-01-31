@@ -672,7 +672,7 @@ contactForm.addEventListener('submit', async (e) => {
 
     // Prepare form data for Web3Forms
     const formData = new FormData();
-    formData.append('access_key', 'a8c86d6e-8f9a-4b7d-9e3c-5a7b8c9d0e1f'); // Replace with your actual Web3Forms access key
+    formData.append('access_key', '1e75e30f-eb9a-440d-890f-839a04409a0b'); // Web3Forms access key
     formData.append('name', name);
     formData.append('email', email);
     formData.append('message', message);
