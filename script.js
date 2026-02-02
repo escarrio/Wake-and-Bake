@@ -125,7 +125,8 @@ function addToCart(product) {
     const existingIndex = cart.findIndex(item => 
         item.name === product.name && 
         item.size === product.size && 
-        item.slices === product.slices
+        item.slices === product.slices &&
+        item.flavor === product.flavor
     );
     
     if (existingIndex !== -1) {
@@ -195,6 +196,7 @@ function renderCartItems() {
                     <h4>${item.name}</h4>
                     ${item.size ? `<p>Size: ${item.size}</p>` : ''}
                     ${item.slices ? `<p>Slices: ${item.slices}</p>` : ''}
+                    ${item.flavor ? `<p>Flavor: ${item.flavor}</p>` : ''}
                     <p class="cart-item-price">₱${item.price} each</p>
                 </div>
                 <div class="cart-item-controls">
@@ -268,6 +270,7 @@ checkoutBtn.addEventListener('click', async () => {
         orderSummary += `${item.name}\n`;
         if (item.size) orderSummary += `  Size: ${item.size}\n`;
         if (item.slices) orderSummary += `  Slices: ${item.slices}\n`;
+        if (item.flavor) orderSummary += `  Flavor: ${item.flavor}\n`;
         orderSummary += `  Quantity: ${item.quantity}\n`;
         orderSummary += `  Price: ₱${itemTotal}\n\n`;
         
@@ -276,6 +279,7 @@ checkoutBtn.addEventListener('click', async () => {
             <strong>${item.name}</strong><br>
             ${item.size ? `Size: ${item.size}<br>` : ''}
             ${item.slices ? `Slices: ${item.slices}<br>` : ''}
+            ${item.flavor ? `Flavor: ${item.flavor}<br>` : ''}
             Quantity: ${item.quantity}<br>
             Price: ₱${itemTotal}
         </li>`;
@@ -429,42 +433,50 @@ document.addEventListener('keydown', (e) => {
 // ==========================================
 
 // Size / Slices select changes → update displayed price
-document.querySelectorAll('.size-select, .slices-select').forEach(select => {
+document.querySelectorAll('.size-select, .slices-select, .flavor-select').forEach(select => {
     select.addEventListener('change', function() {
         const card = this.closest('.product-card');
         const priceEl = card.querySelector('.product-price');
-        const priceMap = JSON.parse(this.getAttribute('data-price-map'));
-        const newPrice = priceMap[this.value];
-        priceEl.textContent = '₱' + newPrice;
-        priceEl.setAttribute('data-base-price', newPrice);
+        const priceMap = this.getAttribute('data-price-map');
+        
+        if (priceMap) {
+            const parsedPriceMap = JSON.parse(priceMap);
+            const newPrice = parsedPriceMap[this.value];
+            priceEl.textContent = '₱' + newPrice;
+            priceEl.setAttribute('data-base-price', newPrice);
 
-        // Animate the price change
-        priceEl.classList.remove('price-change');
-        void priceEl.offsetWidth; // trigger reflow
-        priceEl.classList.add('price-change');
+            // Animate the price change
+            priceEl.classList.remove('price-change');
+            void priceEl.offsetWidth; // trigger reflow
+            priceEl.classList.add('price-change');
+        }
     });
 });
 
-// Quantity input changes → update displayed price
+// Quantity input changes → update displayed price (for items sold by quantity)
 document.querySelectorAll('.quantity-input').forEach(input => {
     input.addEventListener('input', function() {
         // Clamp value
         let val = parseInt(this.value) || 1;
         if (val < 1) val = 1;
-        if (val > 20) val = 20;
+        if (val > 50) val = 50;
         this.value = val;
 
         const card = this.closest('.product-card');
-        const priceEl = card.querySelector('.product-price');
         const unitPrice = parseInt(this.getAttribute('data-unit-price'));
-        const newPrice = unitPrice * val;
-        priceEl.textContent = '₱' + newPrice;
-        priceEl.setAttribute('data-base-price', newPrice);
+        
+        // Only update price display if this has a unit price (not combined with size/flavor selects)
+        if (unitPrice) {
+            const priceEl = card.querySelector('.product-price');
+            const newPrice = unitPrice * val;
+            priceEl.textContent = '₱' + newPrice;
+            priceEl.setAttribute('data-base-price', newPrice);
 
-        // Animate the price change
-        priceEl.classList.remove('price-change');
-        void priceEl.offsetWidth;
-        priceEl.classList.add('price-change');
+            // Animate the price change
+            priceEl.classList.remove('price-change');
+            void priceEl.offsetWidth;
+            priceEl.classList.add('price-change');
+        }
     });
 });
 
@@ -484,18 +496,23 @@ addToCartButtons.forEach(button => {
         
         const sizeSelect = productCard.querySelector('.size-select');
         const slicesSelect = productCard.querySelector('.slices-select');
+        const flavorSelect = productCard.querySelector('.flavor-select');
         const quantityInput = productCard.querySelector('.quantity-input');
         
-        // For quantity-based items: price is already unitPrice * qty in displayed price
-        // but we store unitPrice in cart and use qty in cart for actual quantity management.
-        // So for pastries with quantity input, we add unitPrice as the cart price and qty as quantity.
-        let cartPrice, cartQty;
+        // Determine cart price and quantity
+        let cartPrice = productPrice;
+        let cartQty = 1;
+        
         if (quantityInput) {
-            cartPrice = parseInt(quantityInput.getAttribute('data-unit-price'));
-            cartQty = parseInt(quantityInput.value) || 1;
-        } else {
-            cartPrice = productPrice;
-            cartQty = 1;
+            const unitPrice = parseInt(quantityInput.getAttribute('data-unit-price'));
+            if (unitPrice) {
+                // This item uses unit price (like Monay)
+                cartPrice = unitPrice;
+                cartQty = parseInt(quantityInput.value) || 1;
+            } else {
+                // This item has quantity but price varies by other options (like Pandesal with flavors)
+                cartQty = parseInt(quantityInput.value) || 1;
+            }
         }
 
         const product = {
@@ -503,6 +520,7 @@ addToCartButtons.forEach(button => {
             price: cartPrice,
             size: sizeSelect ? sizeSelect.value : null,
             slices: slicesSelect ? slicesSelect.value : null,
+            flavor: flavorSelect ? flavorSelect.value : null,
             quantity: cartQty
         };
         
@@ -672,7 +690,7 @@ contactForm.addEventListener('submit', async (e) => {
 
     // Prepare form data for Web3Forms
     const formData = new FormData();
-    formData.append('access_key', '1e75e30f-eb9a-440d-890f-839a04409a0b'); // Web3Forms access key
+    formData.append('access_key', '1e75e30f-eb9a-440d-890f-839a04409a0b');
     formData.append('name', name);
     formData.append('email', email);
     formData.append('message', message);
